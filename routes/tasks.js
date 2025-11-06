@@ -2,7 +2,7 @@ const router = require('express').Router();
 const Task = require('../models/task');
 const User = require('../models/user');
 
-// helpers
+// Necessary Helpers
 function parseJSON(str) { if (str == null) return undefined; try { return JSON.parse(str); } catch { return undefined; } }
 async function runQuery(Model, q) {
   const where  = parseJSON(q.where)  || {};
@@ -10,9 +10,7 @@ async function runQuery(Model, q) {
   const select = parseJSON(q.select) || parseJSON(q.filter) || undefined;
   const skip   = q.skip  ? Number(q.skip)  : 0;
   const limit  = q.limit ? Number(q.limit) : (Model.modelName === 'Task' ? 100 : 0);
-
   if (String(q.count) === 'true') return { count: await Model.countDocuments(where) };
-
   let query = Model.find(where);
   if (select) query = query.select(select);
   if (sort)   query = query.sort(sort);
@@ -23,7 +21,6 @@ async function runQuery(Model, q) {
 
 async function syncPending(task) {
   const uid = task.assignedUser;
-
   if (!uid) {
     await User.updateMany({ pendingTasks: task._id }, { $pull: { pendingTasks: task._id } });
     return;
@@ -76,7 +73,6 @@ router.post('/', async (req, res, next) => {
       assignedUserName: req.body.assignedUserName || 'unassigned'
     };
     if (!body.name || !body.deadline) return res.status(400).json({ message: 'Bad Request', data: null });
-
     if (body.assignedUser) {
       const u = await User.findById(body.assignedUser);
       if (!u) return res.status(400).json({ message: 'Bad Request', data: null });
@@ -84,7 +80,6 @@ router.post('/', async (req, res, next) => {
     } else {
       body.assignedUserName = 'unassigned';
     }
-
     const created = await Task.create(body);
     await syncPending(created);
     res.status(201).json({ message: 'Created', data: created });
@@ -96,9 +91,7 @@ router.put('/:id', async (req, res, next) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Not Found', data: null });
-
     const { name, description, deadline, completed, assignedUser, assignedUserName } = req.body;
-
     const isBool = v => (typeof v === 'boolean') || (v === 'true') || (v === 'false');
     if (
       typeof name !== 'string' ||
@@ -108,10 +101,8 @@ router.put('/:id', async (req, res, next) => {
       typeof assignedUser !== 'string' ||
       typeof assignedUserName !== 'string'
     ) return res.status(400).json({ message: 'Bad Request', data: null });
-
     let newCompleted = typeof completed === 'boolean' ? completed : completed === 'true';
     let newAssignedUserName = assignedUserName;
-
     if (assignedUser) {
       const u = await User.findById(assignedUser);
       if (!u) return res.status(400).json({ message: 'Bad Request', data: null });
@@ -119,18 +110,15 @@ router.put('/:id', async (req, res, next) => {
     } else {
       newAssignedUserName = 'unassigned';
     }
-
     if (task.assignedUser && task.assignedUser !== assignedUser) {
       await User.updateOne({ _id: task.assignedUser }, { $pull: { pendingTasks: task._id } });
     }
-
     task.name = name;
     task.description = description;
     task.deadline = new Date(Number(deadline) || deadline);
     task.completed = newCompleted;
     task.assignedUser = assignedUser;
     task.assignedUserName = newAssignedUserName;
-
     await task.save();
     await syncPending(task);
     res.status(200).json({ message: 'OK', data: task });
@@ -142,7 +130,6 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: 'Not Found', data: null });
-
     if (task.assignedUser) {
       await User.updateOne({ _id: task.assignedUser }, { $pull: { pendingTasks: task._id } });
     }
